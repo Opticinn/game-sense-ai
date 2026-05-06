@@ -1,0 +1,40 @@
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Environment variables — JANGAN pernah push ke GitHub!
+.env
+
+# Database & ML artifacts
+*.pt
+*.pth
+*.pkl
+mlruns/
+mlflow.db
+chroma_db/
+
+# Dataset — terlalu besar untuk GitHub
+*.csv
+*.json
+download_data.py
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
