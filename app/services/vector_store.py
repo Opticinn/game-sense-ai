@@ -1,6 +1,6 @@
 # app/services/vector_store.py
 import asyncio
-from langchain_community.vectorstores import Chroma
+from langchain_chroma                 import Chroma
 from langchain_huggingface            import HuggingFaceEmbeddings
 from langchain_core.documents         import Document
 from sqlalchemy                       import select
@@ -69,14 +69,14 @@ class GameVectorStore:
             # Gabungkan semua info game jadi satu teks
             # Ini yang akan di-embed dan dicari
             content = f"""
-Game: {game.title}
-Developer: {game.developer or 'Unknown'}
-Genres: {', '.join(game.genres or [])}
-Tags: {', '.join((game.tags or [])[:10])}
-Description: {game.short_desc or game.description or ''}
-Price: {'Free' if game.is_free else f'${game.price_usd}'}
-Mod Support: {'Yes' if game.has_mod_support else 'No'}
-Review Score: {game.steam_review_score or 0:.0%}
+                Game: {game.title}
+                Developer: {game.developer or 'Unknown'}
+                Genres: {', '.join(game.genres or [])}
+                Tags: {', '.join((game.tags or [])[:10])}
+                Description: {game.short_desc or game.description or ''}
+                Price: {'Free' if game.is_free else f'${game.price_usd}'}
+                Mod Support: {'Yes' if game.has_mod_support else 'No'}
+                Review Score: {game.steam_review_score or 0:.0%}
             """.strip()
 
             # Metadata = info tambahan yang tidak di-embed
@@ -91,6 +91,7 @@ Review Score: {game.steam_review_score or 0:.0%}
                 "genres"         : ", ".join(game.genres or []),
                 "sentiment_score": game.sentiment_score or 0,
                 "steam_review_score": game.steam_review_score or 0,
+                "steam_review_count": game.steam_review_count or 0,
             }
 
             documents.append(Document(page_content=content, metadata=metadata))

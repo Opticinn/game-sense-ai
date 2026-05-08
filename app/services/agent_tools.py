@@ -45,12 +45,15 @@ def search_game(query: str) -> str:
         meta  = r["metadata"]
         harga = "Gratis" if meta.get("is_free") else f"${meta.get('price_usd', 0):.2f}"
         mod   = "✅" if meta.get("has_mod_support") else "❌"
+        review_count = meta.get("steam_review_count", 0)
+        review_text  = f"{review_count:,}" if review_count else "Tidak ada data"
         output += (
             f"{i}. {meta['title']}\n"
-            f"   Genre  : {meta.get('genres', '-')}\n"
-            f"   Harga  : {harga}\n"
-            f"   Rating : {meta.get('steam_review_score', 0):.0%}\n"
-            f"   Mod    : {mod}\n\n"
+            f"   Genre        : {meta.get('genres', '-')}\n"
+            f"   Harga        : {harga}\n"
+            f"   Rating       : {meta.get('steam_review_score', 0):.0%}\n"
+            f"   Jumlah Review: {review_text} (semakin banyak = semakin populer)\n"
+            f"   Mod Support  : {mod}\n\n"
         )
     return output
 

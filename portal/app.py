@@ -1,35 +1,72 @@
+# portal/app.py
+import sys
+import os
+
+# Tambahkan root folder ke Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# portal/app.py
 import streamlit as st
 
 st.set_page_config(
-    page_title="GameSense AI",
-    page_icon="🎮",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    page_title = "GameSense AI",
+    page_icon  = "🎮",
+    layout     = "wide",
+    initial_sidebar_state = "expanded",
 )
 
+# ── Session State Init ─────────────────────────────────────────────────────────
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.title("🎮 GameSense AI")
 st.sidebar.markdown("---")
 
+# Login sederhana
+with st.sidebar.expander("👤 Login"):
+    username = st.text_input("Username", placeholder="masukkan username")
+    if st.button("Login"):
+        if username:
+            st.session_state.user_id = username
+            st.success(f"✅ Login sebagai {username}!")
+            st.rerun()
+
+if st.session_state.user_id:
+    st.sidebar.success(f"👤 {st.session_state.user_id}")
+    if st.sidebar.button("Logout"):
+        st.session_state.user_id = None
+        st.rerun()
+else:
+    st.sidebar.info("💡 Login untuk rekomendasi personal!")
+
+st.sidebar.markdown("---")
+
+# Navigasi
 page = st.sidebar.radio(
-    "Navigate",
-    ["🏠 Home", "🔍 Search & Recommend", "📈 Trending", "🤖 AI Chat", "🎯 Game Detail"],
+    "Navigasi",
+    ["🏠 Home", "🔍 Search & Rekomendasi", "📈 Trending", "🤖 AI Chat", "📝 Daftar"],
 )
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Powered by Qwen2.5 7B + NCF + SHAP")
+st.sidebar.caption("Data: Steam + YouTube + Reddit")
 
+# ── Routing ────────────────────────────────────────────────────────────────────
 if page == "🏠 Home":
-    from portal.pages.home import render
+    from portal.components.home import render
     render()
-elif page == "🔍 Search & Recommend":
-    from portal.pages.search import render
+elif page == "🔍 Search & Rekomendasi":
+    from portal.components.search import render
     render()
 elif page == "📈 Trending":
-    from portal.pages.trending import render
+    from portal.components.trending import render
     render()
 elif page == "🤖 AI Chat":
-    from portal.pages.chat import render
+    from portal.components.chat import render
     render()
-elif page == "🎯 Game Detail":
-    from portal.pages.game_detail import render
+elif page == "📝 Daftar":
+    from portal.components.register import render
     render()

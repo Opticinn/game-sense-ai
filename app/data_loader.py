@@ -44,14 +44,15 @@ async def load_games(limit: int = 5000):
     print(f"✅ Total game di JSON: {len(data):,}")
 
     # Filter & urutkan berdasarkan review terbanyak
+    # Filter & urutkan berdasarkan review terbanyak
     games_list = []
     for app_id, game in data.items():
         positive = game.get("positive", 0) or 0
         negative = game.get("negative", 0) or 0
         total    = positive + negative
 
-        # Filter: minimal 10 review
-        if total < 10:
+        # Filter: minimal 5000 review
+        if total < 5000:
             continue
 
         # Filter: skip genre dewasa
@@ -135,4 +136,4 @@ async def load_games(limit: int = 5000):
 
 
 if __name__ == "__main__":
-    asyncio.run(load_games(limit=5000))
+    asyncio.run(load_games(limit=3000))

@@ -54,18 +54,98 @@ async def get_games(
     return GameListResponse(total=total, page=page, limit=limit, games=games)
 
 
-# ── GET /games/{id} ────────────────────────────────────────────────────────────
-@router.get("/{game_id}", response_model=GameResponse)
-async def get_game(
+# ── GET /games/search ──────────────────────────────────────────────────────────
+@router.get("/search", response_model=GameListResponse)
+async def search_games(
+    q:     str         = Query(..., min_length=1),
+    limit: int         = Query(10, ge=1, le=50),
+    db:    AsyncSession = Depends(get_db),
+):
+    """Cari game berdasarkan judul, genre, atau tags."""
+    # Cari di judul
+    title_query = select(Game).where(
+        Game.title.ilike(f"%{q}%")
+    )
+
+    # Cari di genres dan tags (JSON contains)
+    genre_query = select(Game).where(
+        Game.genres.cast(db.bind.dialect.name and __import__('sqlalchemy').String).ilike(f"%{q}%")
+    )
+
+    result = await db.execute(title_query.limit(limit))
+    games  = result.scalars().all()
+
+    # Kalau hasil title kurang dari limit, tambah dari genre/tag search
+    if len(games) < limit:
+        from sqlalchemy import or_, cast, String
+        combined_query = select(Game).where(
+            or_(
+                Game.title.ilike(f"%{q}%"),
+                cast(Game.genres, String).ilike(f"%{q}%"),
+                cast(Game.tags,   String).ilike(f"%{q}%"),
+            )
+        ).limit(limit)
+
+        result = await db.execute(combined_query)
+        games  = result.scalars().all()
+
+    return GameListResponse(total=len(games), page=1, limit=limit, games=games)
+
+
+# ── GET /games/similar/{game_id} ───────────────────────────────────────────────
+@router.get("/similar/{game_id}", response_model=GameListResponse)
+async def get_similar_games(
     game_id: int,
+    limit:   int          = Query(5, ge=1, le=20),
     db:      AsyncSession = Depends(get_db),
 ):
-    """Ambil detail satu game berdasarkan ID."""
+    """Cari game yang mirip berdasarkan genre."""
+    from sqlalchemy import text, func
+
     game = await db.get(Game, game_id)
     if not game:
-        raise HTTPException(status_code=404, detail=f"Game dengan id {game_id} tidak ditemukan")
-    return game
+        raise HTTPException(status_code=404, detail="Game tidak ditemukan")
 
+    if not game.genres:
+        similar_query = select(Game).where(
+            Game.id != game_id
+        ).order_by(
+            Game.steam_review_score.desc().nullslast()
+        ).limit(limit)
+    else:
+        # Pakai semua genre — lebih spesifik
+        genre_conditions = " AND ".join([
+            f"genres::jsonb @> '[\"{ g }\"]'::jsonb"
+            for g in (game.genres or [])[:2]  # pakai 2 genre pertama
+        ])
+
+        if len(game.genres) >= 2:
+            # Cari yang match 2 genre sekaligus — lebih relevan
+            similar_query = select(Game).where(
+                Game.id != game_id
+            ).filter(
+                text(f"genres::jsonb @> '[\"{ game.genres[0] }\"]'::jsonb"),
+                text(f"genres::jsonb @> '[\"{ game.genres[1] }\"]'::jsonb"),
+            ).order_by(
+                Game.steam_review_score.desc().nullslast()
+            ).limit(limit * 3)  # ambil lebih banyak untuk diacak
+        else:
+            similar_query = select(Game).where(
+                Game.id != game_id
+            ).filter(
+                text(f"genres::jsonb @> '[\"{ game.genres[0] }\"]'::jsonb"),
+            ).order_by(
+                Game.steam_review_score.desc().nullslast()
+            ).limit(limit * 3)
+
+    result = await db.execute(similar_query)
+    games  = result.scalars().all()
+
+    # Acak hasilnya supaya tidak selalu sama
+    import random
+    random.shuffle(games)
+
+    return GameListResponse(total=len(games[:limit]), page=1, limit=limit, games=games[:limit])
 
 # ── POST /games ────────────────────────────────────────────────────────────────
 @router.post("/", response_model=GameResponse, status_code=201)
