@@ -1,6 +1,6 @@
 # app/services/trainer_ncf.py
 import os
-import asyncio
+import pickle
 import pandas as pd
 import numpy as np
 import torch
@@ -19,20 +19,24 @@ MODEL_PATH  = os.path.join(MODEL_DIR, "ncf_model.pt")
 ENCODER_DIR = os.path.join(MODEL_DIR, "encoders")
 
 # ── HYPERPARAMETERS ────────────────────────────────────────────────────────────
-# Hyperparameter = pengaturan training yang kita tentukan sebelum training
-EMBED_DIM   = 32      # ukuran embedding vector
-LAYERS      = [128, 64]  # ukuran hidden layers
-DROPOUT     = 0.5     # dropout rate
-BATCH_SIZE  = 2048    # berapa data diproses sekaligus
-EPOCHS      = 10       # berapa kali model melihat seluruh data
-LR          = 0.0005   # learning rate — seberapa cepat model belajar
-SAMPLE_SIZE = 2_000_000 # ambil 500rb review — cukup untuk training
+EMBED_DIM        = 32
+LAYERS           = [128, 64]
+DROPOUT          = 0.5
+BATCH_SIZE       = 2048
+EPOCHS           = 10
+LR               = 0.0005
+
+# ── STRATIFIED SAMPLING PARAMS ─────────────────────────────────────────────────
+# Bayangkan kamu punya 30 murid, tapi 5 murid dominan menjawab semua pertanyaan.
+# Murid lain tidak pernah dapat giliran. Solusi: batasi setiap murid max 2000 jawaban.
+MIN_GAME_REVIEWS = 5_000    # hanya game dengan total review >= 5000 yang dipakai
+MAX_PER_GAME     = 2_000    # stratified: maksimal 2000 review per game
 
 
 # ── DATASET CLASS ──────────────────────────────────────────────────────────────
 class SteamReviewDataset(Dataset):
     """
-    Dataset class — mengemas data supaya bisa dibaca PyTorch.
+    Dataset class -- mengemas data supaya bisa dibaca PyTorch.
     Bayangkan seperti buku pelajaran yang sudah diformat rapi.
     """
     def __init__(self, user_ids, game_ids, labels):
@@ -47,35 +51,64 @@ class SteamReviewDataset(Dataset):
         return self.user_ids[idx], self.game_ids[idx], self.labels[idx]
 
 
+# ── STRATIFIED SAMPLING FUNCTION ───────────────────────────────────────────────
+def stratified_sample(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ambil maksimal MAX_PER_GAME review untuk setiap game.
+
+    Cara kerja:
+    - Hitung total review per game
+    - Buang game dengan review < MIN_GAME_REVIEWS
+    - Untuk setiap game, ambil maksimal MAX_PER_GAME baris
+    - Hasilnya: semua game terwakili secara adil
+    """
+    print(f"\n[*] Stratified Sampling (max {MAX_PER_GAME:,} review/game)...")
+
+    game_counts    = df["app_id"].value_counts()
+    eligible_games = game_counts[game_counts >= MIN_GAME_REVIEWS].index
+    df_filtered    = df[df["app_id"].isin(eligible_games)]
+
+    print(f"    Game eligible (>= {MIN_GAME_REVIEWS:,} reviews): {len(eligible_games):,}")
+    print(f"    Total rows sebelum stratify: {len(df_filtered):,}")
+
+    sampled = (
+        df_filtered
+        .groupby("app_id", group_keys=False)
+        .apply(lambda g: g.sample(n=min(len(g), MAX_PER_GAME), random_state=42))
+    )
+
+    print(f"    Total rows sesudah stratify: {len(sampled):,}")
+    print(f"    Unique games dalam sample: {sampled['app_id'].nunique():,}")
+    print(f"    Unique users dalam sample: {sampled['author.steamid'].nunique():,}")
+
+    return sampled.reset_index(drop=True)
+
+
 # ── TRAINING FUNCTION ──────────────────────────────────────────────────────────
 def train_ncf():
     print("=" * 60)
-    print("🚀 NCF Training Pipeline")
+    print("NCF Training Pipeline -- dengan Stratified Sampling")
     print("=" * 60)
 
     # ── 1. Load Data ───────────────────────────────────────────────────────────
-    print("\n📖 Step 1: Load data reviews...")
+    print("\n[Step 1] Load data reviews dari CSV...")
+    print("   (File besar ~2GB, harap tunggu...)")
     df = pd.read_csv(
         REVIEWS_CSV,
         usecols=["app_id", "author.steamid", "recommended"],
         low_memory=False,
     )
-    print(f"✅ Total reviews di file: {len(df):,}")
+    print(f"[OK] Total reviews di file: {len(df):,}")
 
-    # Bersihkan dulu
     df = df.dropna(subset=["app_id", "author.steamid", "recommended"])
     df["label"] = df["recommended"].astype(int)
+    print(f"[OK] Setelah drop NaN: {len(df):,}")
 
-    # Sample acak
-    df = df.sample(n=min(SAMPLE_SIZE, len(df)), random_state=42)
-    print(f"✅ Sample yang diambil: {len(df):,}")
-    print(f"✅ Unique games di sample: {df['app_id'].nunique():,}")
-    print(f"✅ Unique users di sample: {df['author.steamid'].nunique():,}")
+    # ── 2. Stratified Sampling ─────────────────────────────────────────────────
+    df = stratified_sample(df)
 
-    # ── 2. Encode IDs ──────────────────────────────────────────────────────────
-    # Encode = ubah ID asli (bisa angka besar) jadi index kecil 0,1,2,3...
-    # Karena Embedding layer butuh index berurutan dari 0
-    print("\n🔢 Step 2: Encode user & game IDs...")
+    # ── 3. Encode IDs ──────────────────────────────────────────────────────────
+    print("\n[Step 2] Encode user & game IDs...")
     user_encoder = LabelEncoder()
     game_encoder = LabelEncoder()
 
@@ -84,62 +117,66 @@ def train_ncf():
 
     num_users = df["user_idx"].nunique()
     num_games = df["game_idx"].nunique()
-    print(f"✅ Total unique users: {num_users:,}")
-    print(f"✅ Total unique games: {num_games:,}")
+    print(f"[OK] Total unique users: {num_users:,}")
+    print(f"[OK] Total unique games: {num_games:,}")
 
-    # ── 3. Train/Test Split ────────────────────────────────────────────────────
-    print("\n✂️  Step 3: Split data train & test...")
+    # ── 4. Train/Test Split ────────────────────────────────────────────────────
+    print("\n[Step 3] Split data train & test...")
     X_train, X_test, y_train, y_test = train_test_split(
         df[["user_idx", "game_idx"]].values,
         df["label"].values,
-        test_size=0.2,    # 20% untuk testing
+        test_size=0.2,
         random_state=42,
     )
-    print(f"✅ Train: {len(X_train):,} | Test: {len(X_test):,}")
+    print(f"[OK] Train: {len(X_train):,} | Test: {len(X_test):,}")
 
-    # ── 4. DataLoader ──────────────────────────────────────────────────────────
+    # ── 5. DataLoader ──────────────────────────────────────────────────────────
     train_dataset = SteamReviewDataset(X_train[:,0], X_train[:,1], y_train)
     test_dataset  = SteamReviewDataset(X_test[:,0],  X_test[:,1],  y_test)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0)
+    test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
-    # ── 5. Inisialisasi Model ──────────────────────────────────────────────────
-    print("\n🧠 Step 4: Inisialisasi NCF model...")
+    # ── 6. Inisialisasi Model ──────────────────────────────────────────────────
+    print("\n[Step 4] Inisialisasi NCF model...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"✅ Device: {device}")
+    print(f"[OK] Device: {device}")
 
     model     = NCFModel(num_users, num_games, EMBED_DIM, LAYERS, DROPOUT).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-    criterion = nn.BCELoss()  # Binary Cross Entropy — cocok untuk masalah suka/tidak suka
+    criterion = nn.BCELoss()
 
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"✅ Total parameters: {total_params:,}")
+    print(f"[OK] Total parameters: {total_params:,}")
 
-    # ── 6. Training Loop ───────────────────────────────────────────────────────
-    print("\n🏋️  Step 5: Training...")
+    # ── 7. Training Loop ───────────────────────────────────────────────────────
+    print("\n[Step 5] Training...")
     os.makedirs(MODEL_DIR, exist_ok=True)
+    os.makedirs(ENCODER_DIR, exist_ok=True)
 
     mlflow.set_tracking_uri("./mlruns")
     mlflow.set_experiment("NCF_GameSense")
 
     with mlflow.start_run():
         mlflow.log_params({
-            "embed_dim":   EMBED_DIM,
-            "layers":      str(LAYERS),
-            "dropout":     DROPOUT,
-            "batch_size":  BATCH_SIZE,
-            "epochs":      EPOCHS,
-            "lr":          LR,
-            "sample_size": SAMPLE_SIZE,
+            "embed_dim":         EMBED_DIM,
+            "layers":            str(LAYERS),
+            "dropout":           DROPOUT,
+            "batch_size":        BATCH_SIZE,
+            "epochs":            EPOCHS,
+            "lr":                LR,
+            "min_game_reviews":  MIN_GAME_REVIEWS,
+            "max_per_game":      MAX_PER_GAME,
+            "num_users":         num_users,
+            "num_games":         num_games,
         })
 
-        best_test_loss  = float("inf")
-        patience        = 3   # berhenti kalau 3 epoch berturut tidak membaik
+        best_test_loss   = float("inf")
+        patience         = 3
         patience_counter = 0
 
         for epoch in range(EPOCHS):
-            # ── Training Phase ─────────────────────────────────────────────────
+            # Training Phase
             model.train()
             train_loss  = 0.0
             train_steps = 0
@@ -149,11 +186,9 @@ def train_ncf():
                 game_ids = game_ids.to(device)
                 labels   = labels.to(device).unsqueeze(1)
 
-                # Forward pass
                 predictions = model(user_ids, game_ids)
                 loss        = criterion(predictions, labels)
 
-                # Backward pass — model belajar dari kesalahan
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -163,7 +198,7 @@ def train_ncf():
 
             avg_train_loss = train_loss / train_steps
 
-            # ── Evaluation Phase ───────────────────────────────────────────────
+            # Evaluation Phase
             model.eval()
             test_loss  = 0.0
             test_steps = 0
@@ -182,7 +217,6 @@ def train_ncf():
                     test_loss  += loss.item()
                     test_steps += 1
 
-                    # Hitung akurasi
                     predicted = (predictions > 0.5).float()
                     correct  += (predicted == labels).sum().item()
                     total    += labels.size(0)
@@ -201,7 +235,6 @@ def train_ncf():
                 "accuracy":   accuracy,
             }, step=epoch)
 
-            # Simpan model terbaik + early stopping
             if avg_test_loss < best_test_loss:
                 best_test_loss   = avg_test_loss
                 patience_counter = 0
@@ -213,27 +246,27 @@ def train_ncf():
                     "layers":      LAYERS,
                     "dropout":     DROPOUT,
                 }, MODEL_PATH)
-                print(f"   💾 Model terbaik disimpan! (test_loss: {best_test_loss:.4f})")
+                print(f"   [SAVED] Model terbaik disimpan! (test_loss: {best_test_loss:.4f})")
             else:
                 patience_counter += 1
-                print(f"   ⚠️ Tidak membaik ({patience_counter}/{patience})")
+                print(f"   [WARN] Tidak membaik ({patience_counter}/{patience})")
                 if patience_counter >= patience:
-                    print(f"   🛑 Early stopping! Training dihentikan.")
+                    print(f"   [STOP] Early stopping!")
                     break
 
-        # Simpan encoder
-        os.makedirs(ENCODER_DIR, exist_ok=True)
-        import pickle
+        # ── 8. Simpan Encoder ──────────────────────────────────────────────────
         with open(os.path.join(ENCODER_DIR, "user_encoder.pkl"), "wb") as f:
             pickle.dump(user_encoder, f)
         with open(os.path.join(ENCODER_DIR, "game_encoder.pkl"), "wb") as f:
             pickle.dump(game_encoder, f)
 
         mlflow.log_metric("best_test_loss", best_test_loss)
-        print(f"\n✅ Training selesai!")
-        print(f"   Best test loss : {best_test_loss:.4f}")
-        print(f"   Model saved    : {MODEL_PATH}")
-        print(f"   Encoders saved : {ENCODER_DIR}")
+
+    print(f"\n[DONE] Training selesai!")
+    print(f"   Best test loss  : {best_test_loss:.4f}")
+    print(f"   Games dalam NCF : {num_games:,}")
+    print(f"   Model saved     : {MODEL_PATH}")
+    print(f"   Encoders saved  : {ENCODER_DIR}")
 
 
 if __name__ == "__main__":
