@@ -55,6 +55,7 @@ class YouTubeScraper:
                 "maxResults" : max_results,
                 "order"      : "relevance",
                 "videoCategoryId": "20",  # kategori Gaming
+                "videoDuration" : "medium",
             }
 
             resp = await self.client.get(f"{self.BASE_URL}/search", params=params)
