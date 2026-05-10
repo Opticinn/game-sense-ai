@@ -93,59 +93,21 @@ async def search_games(
 
 
 # ── GET /games/similar/{game_id} ───────────────────────────────────────────────
-@router.get("/similar/{game_id}", response_model=GameListResponse)
+@router.get("/similar/{game_id}")
 async def get_similar_games(
     game_id: int,
-    limit:   int          = Query(5, ge=1, le=20),
+    limit:   int          = Query(6, ge=1, le=20),
     db:      AsyncSession = Depends(get_db),
 ):
-    """Cari game yang mirip berdasarkan genre."""
-    from sqlalchemy import text, func
+    """Cari game serupa menggunakan NCF + genre fallback."""
+    from app.services.ncf_recommender import ncf_recommender
 
     game = await db.get(Game, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game tidak ditemukan")
 
-    if not game.genres:
-        similar_query = select(Game).where(
-            Game.id != game_id
-        ).order_by(
-            Game.steam_review_score.desc().nullslast()
-        ).limit(limit)
-    else:
-        # Pakai semua genre — lebih spesifik
-        genre_conditions = " AND ".join([
-            f"genres::jsonb @> '[\"{ g }\"]'::jsonb"
-            for g in (game.genres or [])[:2]  # pakai 2 genre pertama
-        ])
-
-        if len(game.genres) >= 2:
-            # Cari yang match 2 genre sekaligus — lebih relevan
-            similar_query = select(Game).where(
-                Game.id != game_id
-            ).filter(
-                text(f"genres::jsonb @> '[\"{ game.genres[0] }\"]'::jsonb"),
-                text(f"genres::jsonb @> '[\"{ game.genres[1] }\"]'::jsonb"),
-            ).order_by(
-                Game.steam_review_score.desc().nullslast()
-            ).limit(limit * 3)  # ambil lebih banyak untuk diacak
-        else:
-            similar_query = select(Game).where(
-                Game.id != game_id
-            ).filter(
-                text(f"genres::jsonb @> '[\"{ game.genres[0] }\"]'::jsonb"),
-            ).order_by(
-                Game.steam_review_score.desc().nullslast()
-            ).limit(limit * 3)
-
-    result = await db.execute(similar_query)
-    games  = result.scalars().all()
-
-    # Acak hasilnya supaya tidak selalu sama
-    import random
-    random.shuffle(games)
-
-    return GameListResponse(total=len(games[:limit]), page=1, limit=limit, games=games[:limit])
+    results = await ncf_recommender.get_similar_games(game, db, limit=limit)
+    return {"games": results, "total": len(results)}
 
 # ── POST /games ────────────────────────────────────────────────────────────────
 @router.post("/", response_model=GameResponse, status_code=201)

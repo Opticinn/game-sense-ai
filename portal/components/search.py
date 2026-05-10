@@ -159,6 +159,11 @@ def render():
                         st.caption(f"🎮 {genres_text}")
                         review_count = sg.get("steam_review_count") or 0
                         st.caption(f"⭐ {sg.get('steam_review_score', 0):.0%} — 📝 {review_count:,} reviews")
+                        method = sg.get("method", "genre")
+                        if method == "ncf":
+                            st.caption("🤖 Rekomendasi NCF")
+                        else:
+                            st.caption("🎮 Genre Serupa")
                         harga = "Gratis" if sg.get("is_free") else f"${sg.get('price_usd', 0):.2f}"
                         st.caption(f"💰 {harga}")
                         if sg.get("has_mod_support"):
