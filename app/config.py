@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     # ── YouTube ────────────────────────────────────────────
     YOUTUBE_API_KEY: str = ""
+    
+    # ── RAWG API ───────────────────────────────────────────────────────────────
+    RAWG_API_KEY: str = ""
 
     # ── Reddit ─────────────────────────────────────────────
     REDDIT_CLIENT_ID: str = ""
