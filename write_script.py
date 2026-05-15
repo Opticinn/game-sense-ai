@@ -1,3 +1,4 @@
+code = """\
 import asyncio
 import argparse
 import sys
@@ -84,3 +85,10 @@ def main():
 
 
 main()
+"""
+
+with open("scripts/run_enrichment.py", "w", encoding="utf-8") as f:
+    f.write(code)
+
+print("Berhasil!")
+print(f"Baris: {len(code.splitlines())}")

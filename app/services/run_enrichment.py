@@ -65,7 +65,7 @@ def main():
 
     args = parser.parse_args()
 
-    print("GameSense AI Data Pipeline")
+    print("\nGameSense AI Data Pipeline")
     print(f"  Source : {args.source}")
     if args.source in ("rawg", "all"):
         print(f"  Pages  : {args.pages} ({args.pages * 40} game)")
