@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.services.scrapers.rawg_enricher  import RAWGEnricher
 from app.services.scrapers.steam_enricher import SteamEnricher
 from app.services.trending_score          import TrendingScoreEngine
+from app.services.sentiment_pipeline      import SentimentPipeline
 
 
 async def run_rawg(pages):
@@ -34,19 +35,29 @@ async def run_trending(limit):
     await engine.run(limit=limit if limit > 0 else None)
 
 
+async def run_sentiment(limit):
+    print("=" * 50)
+    print("Sentiment Pipeline")
+    print("=" * 50)
+    pipeline = SentimentPipeline()
+    await pipeline.run(limit=limit if limit > 0 else None)
+
+
 async def run_all(pages, limit):
     await run_rawg(pages)
     print()
     await run_steam(limit)
     print()
     await run_trending(limit)
+    print()
+    await run_sentiment(limit)
 
 
 def main():
     parser = argparse.ArgumentParser(description="GameSense AI Data Pipeline")
     parser.add_argument(
         "--source",
-        choices=["rawg", "steam", "trending", "all"],
+        choices=["rawg", "steam", "trending", "sentiment", "all"],
         default="all",
         help="Sumber data (default: all)"
     )
@@ -69,7 +80,7 @@ def main():
     print(f"  Source : {args.source}")
     if args.source in ("rawg", "all"):
         print(f"  Pages  : {args.pages} ({args.pages * 40} game)")
-    if args.source in ("steam", "trending", "all"):
+    if args.source in ("steam", "trending", "sentiment", "all"):
         print(f"  Limit  : {'semua' if args.limit == 0 else args.limit} game")
     print()
 
@@ -79,6 +90,8 @@ def main():
         asyncio.run(run_steam(args.limit))
     elif args.source == "trending":
         asyncio.run(run_trending(args.limit))
+    elif args.source == "sentiment":
+        asyncio.run(run_sentiment(args.limit))
     else:
         asyncio.run(run_all(args.pages, args.limit))
 
