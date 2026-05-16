@@ -37,6 +37,7 @@ class Game(Base):
 
     # ── Harga ──────────────────────────────────────────────
     price_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    price_idr: Mapped[Optional[int]]   = mapped_column(Integer, nullable=True)
     is_free:   Mapped[bool]            = mapped_column(Boolean, default=False)
 
     # ── Skor dari Steam ────────────────────────────────────

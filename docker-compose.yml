@@ -1,4 +1,5 @@
 services:
+  # ── Database ────────────────────────────────────────────────
   postgres:
     image: postgres:16
     container_name: gamesense_postgres
@@ -10,13 +11,25 @@ services:
       - "5438:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamesense"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ── Cache ────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: gamesense_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ── LLM ─────────────────────────────────────────────────────
   ollama:
     image: ollama/ollama
     container_name: gamesense_ollama
@@ -24,6 +37,44 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+
+  # ── Backend API ──────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: gamesense_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://gamesense:gamesense@postgres:5438/gamesense
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=http://ollama:11434
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./models:/app/models
+      - ./chroma_db:/app/chroma_db
+    restart: unless-stopped
+
+  # ── Frontend Portal ──────────────────────────────────────────
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile.portal
+    container_name: gamesense_portal
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
 
 volumes:
   postgres_data:

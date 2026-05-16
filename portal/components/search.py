@@ -2,6 +2,7 @@
 import streamlit as st
 import httpx
 import plotly.graph_objects as go
+from portal.utils.currency import format_price
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -158,16 +159,21 @@ def render():
 
                     with col3:
                         review_count = game.get("steam_review_count", 0) or 0
-                        st.metric("Rating", f"{game.get('steam_review_score', 0):.0%}")
+                        score = game.get('steam_review_score') or 0
+                        # Kalau > 1, berarti sudah dalam skala 0-100
+                        if score > 1:
+                            score = score / 100
+                        st.metric("Rating", f"{score:.0%}")
                         st.caption(f"📝 {review_count:,} reviews")
-                        harga = "Gratis" if game.get("is_free") else f"${game.get('price_usd', 0):.2f}"
-                        st.caption(f"💰 {harga}")
+                        st.caption(f" {format_price(game)}")
                         if game.get("has_mod_support"):
                             st.caption("🔧 Mod Support ✅")
 
                     # Tombol Detail di hasil search
                     if st.button("Detail", key=f"btn_{game['id']}"):
                         st.session_state["selected_game"] = game
+                        st.session_state["detail_game_id"] = game["id"] 
+                        st.session_state["previous_page"]  = "🔍 Search & Rekomendasi"
                         if st.session_state.get("detail_clicked_before"):
                             st.session_state["show_toast"] = True
                         else:
@@ -199,8 +205,7 @@ def render():
                     st.write(f"**Genre:** {', '.join(game.get('genres') or [])}")
                     tags_text = ', '.join((game.get('tags') or [])[:5])
                     st.write(f"**Tags:** {tags_text}")
-                    harga = "Gratis" if game.get("is_free") else f"${game.get('price_usd', 0):.2f}"
-                    st.write(f"**Harga:** {harga}")
+                    st.write(f"**Harga:** {format_price(game)}")
                     review_count = game.get("steam_review_count", 0) or 0
                     st.write(f"**Rating:** {game.get('steam_review_score', 0):.0%} dari {review_count:,} reviews")
                     st.write(f"**Mod Support:** {'✅' if game.get('has_mod_support') else '❌'}")
@@ -284,13 +289,15 @@ def render():
                             st.caption("🤖 Rekomendasi NCF")
                         else:
                             st.caption("🎮 Genre Serupa")
-                        harga = "Gratis" if sg.get("is_free") else f"${sg.get('price_usd', 0):.2f}"
-                        st.caption(f"💰 {harga}")
+                        st.caption(f" {format_price(sg)}")
                         if sg.get("has_mod_support"):
                             st.caption("🔧 Mod Support ✅")
+                            
                         # Tombol Detail di rekomendasi serupa
                         if st.button("Detail", key=f"rec_{sg['id']}"):
                             st.session_state["selected_game"] = sg
+                            st.session_state["detail_game_id"] = sg["id"] 
+                            st.session_state["previous_page"]  = "🔍 Search & Rekomendasi" 
                             if st.session_state.get("detail_clicked_before"):
                                 st.session_state["show_toast"] = True
                             else:

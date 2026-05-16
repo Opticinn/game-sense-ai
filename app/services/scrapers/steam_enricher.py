@@ -66,8 +66,8 @@ class SteamEnricher:
                 f"{STEAM_API_BASE}/appdetails",
                 params={
                     "appids":  steam_id,
-                    "cc":      "us",    # harga dalam USD
-                    "l":       "en",    # bahasa Inggris
+                    "cc":      "id",    # harga dalam IDR (Indonesia)
+                    "l":       "id",    # bahasa Indonesia
                 }
             )
             response.raise_for_status()
@@ -99,14 +99,17 @@ class SteamEnricher:
         updates = {}
 
         # Harga
+        # Harga
         price_overview = data.get("price_overview", {})
         if price_overview:
             final_price = price_overview.get("final", 0)
-            updates["price_usd"] = round(final_price / 100, 2)  # Steam kirim dalam sen
+            updates["price_usd"] = round(final_price / 100, 2)
+            updates["price_idr"] = final_price // 100  # Steam IDR sudah dalam Rupiah
             updates["is_free"]   = False
         elif data.get("is_free"):
             updates["is_free"]   = True
             updates["price_usd"] = 0.0
+            updates["price_idr"] = 0
 
         # Header image
         if data.get("header_image"):

@@ -8,20 +8,21 @@ from datetime import datetime
 # "Base" = field yang dipakai bersama oleh Create dan Response
 
 class GameBase(BaseModel):
-    title:       str            = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
-    short_desc:  Optional[str] = Field(None, max_length=500)
-    developer:   Optional[str] = None
-    publisher:   Optional[str] = None
-    genres:      List[str]     = []
-    tags:        List[str]     = []
-    price_usd:   Optional[float] = Field(None, ge=0)  # ge=0 artinya >= 0, tidak boleh minus
-    is_free:     bool           = False
-    has_mod_support: bool       = False
-    header_image:    Optional[str] = None
-    trailer_url:     Optional[str] = None
-    steam_id:    Optional[str] = None
-    epic_id:     Optional[str] = None
+    title:              str                 = Field(..., min_length=1, max_length=255)
+    description:        Optional[str]       = None
+    short_desc:         Optional[str]       = Field(None, max_length=500)
+    developer:          Optional[str]       = None
+    publisher:          Optional[str]       = None
+    genres:             List[str]           = []
+    tags:               List[str]           = []
+    price_usd:          Optional[float]     = Field(None, ge=0)  # ge=0 artinya >= 0, tidak boleh minus
+    price_idr:          Optional[int]       = None
+    is_free:            bool                = False
+    has_mod_support:    bool                = False
+    header_image:       Optional[str]       = None
+    trailer_url:        Optional[str]       = None
+    steam_id:           Optional[str]       = None
+    epic_id:            Optional[str]       = None
 
 
 # ── CREATE SCHEMA ──────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ class GameUpdate(BaseModel):
     title:           Optional[str]   = None
     description:     Optional[str]   = None
     price_usd:       Optional[float] = Field(None, ge=0)
+    price_idr:       Optional[int]   = None
     genres:          Optional[List[str]] = None
     tags:            Optional[List[str]] = None
     has_mod_support: Optional[bool]  = None
@@ -86,6 +88,7 @@ class TrendingGame(BaseModel):
     genres:          List[str]       = []
     tags:            List[str]       = []
     price_usd:       Optional[float] = None
+    price_idr:       Optional[int]   = None
     is_free:         bool            = False
     has_mod_support: bool            = False
     header_image:    Optional[str]   = None

@@ -20,6 +20,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
+if "detail_game_id" not in st.session_state:
+    st.session_state.detail_game_id = None
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.title("🎮 GameSense AI")
@@ -47,15 +49,33 @@ st.sidebar.markdown("---")
 # Navigasi
 page = st.sidebar.radio(
     "Navigasi",
-    ["🏠 Home", "🔍 Search & Rekomendasi", "📈 Trending", "🤖 AI Chat", "📝 Daftar"],
+    ["🏠 Home", "🔍 Search & Rekomendasi", "📈 Trending", "🤖 AI Chat", "🎮 Detail Game", "📝 Daftar"],
 )
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Powered by Qwen2.5 7B + NCF + SHAP")
 st.sidebar.caption("Data: Steam + YouTube + Reddit")
 
+
+# Cek back navigation
+if st.session_state.get("go_back_to"):
+    target = st.session_state.pop("go_back_to")
+    st.session_state["detail_game_id"] = None
+    # Force re-render halaman asal
+    if target == "🔍 Search & Rekomendasi":
+        from portal.components.search import render
+        render()
+    elif target == "📈 Trending":
+        from portal.components.trending import render
+        render()
+    st.stop()
+
 # ── Routing ────────────────────────────────────────────────────────────────────
-if page == "🏠 Home":
+# Auto redirect ke detail kalau ada game yang dipilih
+if st.session_state.get("detail_game_id"):
+    from portal.components.game_detail import render
+    render()
+elif page == "🏠 Home":
     from portal.components.home import render
     render()
 elif page == "🔍 Search & Rekomendasi":
