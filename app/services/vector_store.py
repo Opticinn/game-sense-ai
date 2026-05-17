@@ -66,30 +66,38 @@ class GameVectorStore:
         # Document = satuan teks yang bisa dicari di vector store
         documents = []
         for game in games:
-            # Gabungkan semua info game jadi satu teks
-            # Ini yang akan di-embed dan dicari
+        # Harga
+            if game.is_free:
+                harga = "Gratis"
+            elif game.price_idr:
+                harga = f"Rp {game.price_idr:,}".replace(",", ".")
+            else:
+                harga = f"${game.price_usd or 0:.2f}"
+
             content = f"""
                 Game: {game.title}
                 Developer: {game.developer or 'Unknown'}
                 Genres: {', '.join(game.genres or [])}
                 Tags: {', '.join((game.tags or [])[:10])}
                 Description: {game.short_desc or game.description or ''}
-                Price: {'Free' if game.is_free else f'${game.price_usd}'}
+                Price: {harga}
                 Mod Support: {'Yes' if game.has_mod_support else 'No'}
                 Review Score: {game.steam_review_score or 0:.0%}
+                Trending Score: {game.trending_score or 0:.1f}
+                Sentiment Score: {game.sentiment_score or 0:.2f}
             """.strip()
 
-            # Metadata = info tambahan yang tidak di-embed
-            # tapi bisa diakses setelah dokumen ditemukan
             metadata = {
-                "game_id"        : game.id,
-                "title"          : game.title,
-                "steam_id"       : game.steam_id or "",
-                "price_usd"      : game.price_usd or 0,
-                "is_free"        : game.is_free,
-                "has_mod_support": game.has_mod_support,
-                "genres"         : ", ".join(game.genres or []),
-                "sentiment_score": game.sentiment_score or 0,
+                "game_id"           : game.id,
+                "title"             : game.title,
+                "steam_id"          : game.steam_id or "",
+                "price_usd"         : game.price_usd or 0,
+                "price_idr"         : game.price_idr or 0,
+                "is_free"           : game.is_free,
+                "has_mod_support"   : game.has_mod_support,
+                "genres"            : ", ".join(game.genres or []),
+                "sentiment_score"   : game.sentiment_score or 0,
+                "trending_score"    : game.trending_score or 0,
                 "steam_review_score": game.steam_review_score or 0,
                 "steam_review_count": game.steam_review_count or 0,
             }
