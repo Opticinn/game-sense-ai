@@ -68,7 +68,9 @@ class RAGChatEngine:
         - Jawab dalam Bahasa Indonesia kecuali user pakai bahasa lain
         - Tampilkan harga dalam Rupiah (IDR)
         - Jangan tampilkan mod support kalau tidak tersedia
-        - Kalau user bertanya di luar konteks game (politik, kesehatan, dll),
+        - Kalau user bertanya tentang fakta seputar game (award, sejarah, berita, developer, dll),
+        LANGSUNG jawab dari pengetahuanmu tanpa tanya balik atau minta konfirmasi
+        - Kalau user bertanya di luar konteks game sama sekali,
         tolak dengan sopan dan arahkan kembali ke topik game
         - Kalau tidak login, tambahkan di akhir: '💡 Login untuk rekomendasi yang lebih personal!'
         """)
